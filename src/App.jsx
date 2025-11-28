@@ -284,6 +284,8 @@ export default function App() {
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [showQuestionModal, setShowQuestionModal] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
+    // FIX: State for mobile menu
+    const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     
     const [propertyTab, setPropertyTab] = useState('REVIEWS'); 
     const [searchTerm, setSearchTerm] = useState('');
@@ -508,10 +510,28 @@ export default function App() {
     };
 
     // --- SUB-COMPONENTS ---
-    const Navbar = () => (
+    // Added props for mobile menu state and handlers
+    const MobileNavLink = ({ label, currentView, targetView, onClick, icon }) => {
+        const isActive = currentView === targetView;
+        const activeClass = isActive 
+            ? 'bg-yellow-50 text-yellow-700 font-bold' 
+            : 'text-gray-700 hover:bg-gray-50';
+            
+        return (
+            <button
+                onClick={onClick}
+                className={`w-full text-left flex items-center gap-2 text-sm p-2 rounded-lg transition-colors ${activeClass}`}
+            >
+                {icon}
+                {label}
+            </button>
+        );
+    };
+
+    const Navbar = ({ isMobileMenuOpen, setIsMobileMenuOpen, user, handleLogout, setView, setCategory, view, setShowAuthModal }) => (
         <div className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
             <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
-                <div onClick={() => setView('HOME')} className="flex items-center gap-2 cursor-pointer group">
+                <div onClick={() => { setView('HOME'); setIsMobileMenuOpen(false); }} className="flex items-center gap-2 cursor-pointer group">
                     <div className="bg-yellow-500 p-1.5 rounded-lg group-hover:bg-yellow-400 transition-colors">
                         <Building2 size={20} className="text-white" />
                     </div>
@@ -520,6 +540,7 @@ export default function App() {
                     </h1>
                 </div>
 
+                {/* Desktop Navigation - Hidden on mobile */}
                 <div className="hidden md:flex items-center gap-6">
                     <button 
                         onClick={() => { setCategory('ON'); setView('LIST_ON'); }} 
@@ -562,10 +583,76 @@ export default function App() {
                         </button>
                     )}
                 </div>
-                <button className="md:hidden text-gray-500">
-                    <Menu size={24}/>
+
+                {/* Mobile Menu Icon & Toggle Logic */}
+                <button 
+                    onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
+                    className="md:hidden text-gray-500 hover:text-gray-700"
+                >
+                    {isMobileMenuOpen ? <X size={24}/> : <Menu size={24}/>}
                 </button>
             </div>
+            
+            {/* Mobile Menu Dropdown (Conditionally Rendered) */}
+            {isMobileMenuOpen && (
+                <div className="md:hidden bg-white border-t border-gray-100 p-4 shadow-lg animate-in fade-in slide-in-from-top-1">
+                    <div className="flex flex-col gap-3">
+                        <MobileNavLink 
+                            label="Home" 
+                            currentView={view} 
+                            targetView="HOME" 
+                            onClick={() => { setView('HOME'); setIsMobileMenuOpen(false); }}
+                            icon={<Home size={18}/>}
+                        />
+                        <MobileNavLink 
+                            label="On Campus" 
+                            currentView={view} 
+                            targetView="LIST_ON" 
+                            onClick={() => { setCategory('ON'); setView('LIST_ON'); setIsMobileMenuOpen(false); }}
+                            icon={<Building2 size={18}/>}
+                        />
+                        <MobileNavLink 
+                            label="Off Campus" 
+                            currentView={view} 
+                            targetView="LIST_OFF" 
+                            onClick={() => { setCategory('OFF'); setView('LIST_OFF'); setIsMobileMenuOpen(false); }}
+                            icon={<MapPin size={18}/>}
+                        />
+                        <MobileNavLink 
+                            label="About" 
+                            currentView={view} 
+                            targetView="ABOUT" 
+                            onClick={() => { setView('ABOUT'); setIsMobileMenuOpen(false); }}
+                            icon={<Info size={18}/>}
+                        />
+                        <MobileNavLink 
+                            label="Contact" 
+                            currentView={view} 
+                            targetView="CONTACT" 
+                            onClick={() => { setView('CONTACT'); setIsMobileMenuOpen(false); }}
+                            icon={<Mail size={18}/>}
+                        />
+
+                        <div className="pt-3 border-t border-gray-100">
+                            {user && !user.isAnonymous ? (
+                                <button 
+                                    onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                                    className="w-full text-left flex items-center gap-2 text-sm font-medium text-red-600 hover:text-red-700 p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                >
+                                    <LogOut size={18}/> Logout ({user.email ? user.email.split('@')[0] : 'User'})
+                                </button>
+                            ) : (
+                                <button 
+                                    onClick={() => { setShowAuthModal(true); setIsMobileMenuOpen(false); }}
+                                    className="w-full text-left flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-blue-600 p-2 rounded-lg hover:bg-blue-50 transition-colors"
+                                >
+                                    <User size={18}/> Login / Sign Up
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 
@@ -790,7 +877,7 @@ export default function App() {
         const handleFileChange = async (e) => {
             if (e.target.files && e.target.files[0]) {
                 setProcessing(true);
-                const reader = new FileReader();
+                const reader = new FileReader(); 
                 reader.readAsDataURL(e.target.files[0]);
                 reader.onload = (event) => {
                     const i = new Image(); 
@@ -934,12 +1021,20 @@ export default function App() {
     };
 
     // --- VIEW RENDERER HELPER ---
-    // This is the key fix: We wrap the view logic in a function instead of returning early
     const renderContent = () => {
         if (view === 'HOME') {
             return (
                 <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-                    <Navbar />
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
                     <div className="bg-white border-b border-gray-200 pt-12 pb-16 px-6 text-center">
                         <h1 className="text-4xl md:text-5xl font-black text-gray-900 mb-4 tracking-tight">
                             Find your home at Waterloo.
@@ -1054,7 +1149,16 @@ export default function App() {
             
             return (
                 <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-                    <Navbar />
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
                     <div className="max-w-4xl mx-auto px-6 py-8 flex-grow">
                         <div className="flex flex-col md:flex-row justify-between items-end gap-4 mb-8">
                             <div className="w-full md:w-auto">
@@ -1136,7 +1240,16 @@ export default function App() {
         if (view === 'PROPERTY') {
             return (
                 <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-                    <Navbar />
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
                     <div className="max-w-4xl mx-auto px-6 py-8 flex-grow">
                         <div className="flex justify-between items-center mb-8">
                             <button 
@@ -1329,7 +1442,16 @@ export default function App() {
         if (view === 'ABOUT') {
             return (
                 <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-                    <Navbar />
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
                     <div className="max-w-3xl mx-auto px-6 py-12 flex-grow">
                         <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm">
                             <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mb-6">
@@ -1368,7 +1490,16 @@ export default function App() {
         if (view === 'CONTACT') {
             return (
                 <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-                    <Navbar />
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
                     <div className="max-w-3xl mx-auto px-6 py-12 flex-grow">
                         <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm text-center">
                             <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6 mx-auto">
@@ -1406,7 +1537,7 @@ export default function App() {
         <>
             {renderContent()}
             {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} auth={auth} />}
-            <Analytics /> {/* ✅ Added here - simple and clean */}
+            <Analytics /> 
         </>
     );
 }
