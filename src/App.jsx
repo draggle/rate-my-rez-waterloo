@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { MapPin, Star, Building2, Home, Search, Plus, MessageSquare, ArrowLeft, TrendingUp, Camera, X, Image as ImageIcon, DollarSign, Footprints, Map, Filter, Menu, ThumbsUp, Info, Mail, GraduationCap, Check, AlertTriangle, MessageCircle, Send, CornerDownRight, LogIn, LogOut, User } from 'lucide-react';
+import { MapPin, Star, Building2, Home, Search, Plus, MessageSquare, ArrowLeft, TrendingUp, Camera, X, Image as ImageIcon, DollarSign, Footprints, Map, Filter, Menu, ThumbsUp, Info, Mail, GraduationCap, Check, AlertTriangle, MessageCircle, Send, CornerDownRight, LogIn, LogOut, User, Edit } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
@@ -284,8 +284,11 @@ export default function App() {
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [showQuestionModal, setShowQuestionModal] = useState(false);
     const [showAuthModal, setShowAuthModal] = useState(false);
-    // FIX: State for mobile menu
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    
+    // EDITING FEATURE STATES
+    const [showEditModal, setShowEditModal] = useState(false);
+    const [reviewToEdit, setReviewToEdit] = useState(null);
     
     const [propertyTab, setPropertyTab] = useState('REVIEWS'); 
     const [searchTerm, setSearchTerm] = useState('');
@@ -434,7 +437,7 @@ export default function App() {
         };
     }, [reviews]);
 
-    // --- SUBMIT REVIEW ---
+    // --- SUBMIT/UPDATE REVIEW ---
     const submitReview = async (formData) => {
         if (!db) { 
             alert("Database not connected yet!"); 
@@ -465,6 +468,28 @@ export default function App() {
             alert("Error posting: " + err.message);
         }
     };
+    
+    // Update function for editing
+    const updateReview = async (reviewId, formData) => {
+        if (!db || !appId) {
+            alert("Database not connected.");
+            return;
+        }
+        
+        try {
+            const reviewRef = doc(db, 'artifacts', appId, 'public', 'data', 'reviews', reviewId);
+            await updateDoc(reviewRef, {
+                ...formData,
+                lastEdited: serverTimestamp(), 
+            });
+            setShowEditModal(false);
+            setReviewToEdit(null);
+        } catch (err) {
+            console.error("Error updating review:", err);
+            alert("Error updating: " + err.message);
+        }
+    };
+
 
     const submitQuestion = async (text) => {
         if (!db || !user) { 
@@ -508,9 +533,29 @@ export default function App() {
             window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(selectedProp.address)}`, '_blank');
         }
     };
+    
+    // NEW: Handler for editing from the Home feed
+    const handleEditFromHome = (review) => {
+        const allProperties = [...ON_CAMPUS_DORMS, ...POPULAR_OFF_CAMPUS];
+        
+        // Find property details based on the review's propertyId
+        const propDetails = allProperties.find(p => p.id === review.propertyId) || {
+            id: review.propertyId,
+            name: review.propertyName,
+            type: 'Custom Property',
+            address: review.propertyName + ', Waterloo, ON'
+        };
+        
+        // Set the property view and context
+        selectProperty(propDetails);
+
+        // Immediately set the review for editing and open the modal
+        setReviewToEdit(review);
+        setShowEditModal(true);
+    };
+
 
     // --- SUB-COMPONENTS ---
-    // Added props for mobile menu state and handlers
     const MobileNavLink = ({ label, currentView, targetView, onClick, icon }) => {
         const isActive = currentView === targetView;
         const activeClass = isActive 
@@ -744,9 +789,22 @@ export default function App() {
         );
     };
 
-    const ReviewCard = ({ review, showPropertyContext }) => {
+    const ReviewCard = ({ review, showPropertyContext, onEditClick }) => {
         const hasVoted = user && review.votedUids && review.votedUids.includes(user.uid);
+        const isAuthor = user && review.userId === user.uid; 
         
+        const handleEditClick = (e) => {
+            e.stopPropagation();
+            if (onEditClick) {
+                // If onEditClick is provided (Home feed)
+                onEditClick(review); 
+            } else {
+                // Default behavior (Property Detail page)
+                setReviewToEdit(review);
+                setShowEditModal(true);
+            }
+        };
+
         return (
             <div className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm hover:shadow-md transition-shadow">
                 <div className="flex justify-between items-start mb-3">
@@ -762,7 +820,8 @@ export default function App() {
                         <div className="flex justify-between w-full">
                             <StarRating rating={review.rating} />
                             <span className="text-xs text-gray-400 font-mono">
-                                {review.timestamp ? new Date(review.timestamp.seconds * 1000).toLocaleDateString() : 'Just now'}
+                                {review.lastEdited ? `Edited ${new Date(review.lastEdited.seconds * 1000).toLocaleDateString()}` : 
+                                review.timestamp ? new Date(review.timestamp.seconds * 1000).toLocaleDateString() : 'Just now'}
                             </span>
                         </div>
                         <div className="flex gap-4 mt-2 text-xs font-medium text-gray-500 flex-wrap">
@@ -821,14 +880,23 @@ export default function App() {
                         />
                     </div>
                 )}
-                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-end">
+                <div className="mt-4 pt-3 border-t border-gray-100 flex items-center justify-between">
+                    {/* EDIT BUTTON USES THE UNIFIED HANDLER */}
+                    {isAuthor && (
+                        <button
+                            onClick={handleEditClick} 
+                            className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-gray-500 hover:text-yellow-600 bg-gray-50 hover:bg-yellow-50 transition-colors"
+                        >
+                            <Edit size={12} /> Edit Review
+                        </button>
+                    )}
                     <button 
                         onClick={(e) => { 
                             e.stopPropagation(); 
                             handleLike(review.id, review.votedUids); 
                         }} 
                         disabled={hasVoted || !user} 
-                        className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${hasVoted ? 'text-blue-600 bg-blue-100 cursor-not-allowed' : 'text-gray-500 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`}
+                        className={`ml-auto flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full transition-colors ${hasVoted ? 'text-blue-600 bg-blue-100 cursor-not-allowed' : 'text-gray-500 hover:text-blue-600 bg-gray-50 hover:bg-blue-50'}`}
                     >
                         <ThumbsUp size={12} className={hasVoted ? 'fill-blue-600' : 'fill-transparent'}/> 
                         Helpful {review.helpfulCount > 0 && `(${review.helpfulCount})`}
@@ -863,14 +931,15 @@ export default function App() {
         </div>
     );
     
-    const ReviewModalContent = () => {
-        const [r, setR] = useState(0); 
-        const [locR, setLocR] = useState(0); 
-        const [c, setC] = useState('');
-        const [rent, setRent] = useState('');
-        const [dist, setDist] = useState('');
-        const [img, setImg] = useState(null);
-        const [tags, setTags] = useState([]);
+    // REUSABLE COMPONENT FOR BOTH NEW AND EDIT
+    const ReviewModalContent = ({ initialData = {}, onSave, isEditing = false, onClose }) => {
+        const [r, setR] = useState(initialData.rating || 0); 
+        const [locR, setLocR] = useState(initialData.locationRating || 0); 
+        const [c, setC] = useState(initialData.comment || '');
+        const [rent, setRent] = useState(initialData.rent || '');
+        const [dist, setDist] = useState(initialData.distance || '');
+        const [img, setImg] = useState(initialData.image || null);
+        const [tags, setTags] = useState(initialData.tags || []);
         const [processing, setProcessing] = useState(false);
         const fileInputRef = useRef(null);
 
@@ -904,6 +973,18 @@ export default function App() {
             }
         };
 
+        const handleSave = () => {
+            onSave({
+                rating: r, 
+                locationRating: locR, 
+                rent: Number(rent), 
+                distance: Number(dist), 
+                comment: c, 
+                image: img, 
+                tags
+            });
+        };
+
         return (
             <div className="space-y-6">
                 <div>
@@ -925,6 +1006,7 @@ export default function App() {
                                 value={rent} 
                                 onChange={e=>setRent(e.target.value)} 
                                 className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-yellow-500 outline-none"
+                                placeholder="0"
                             />
                         </div>
                     </div>
@@ -939,6 +1021,7 @@ export default function App() {
                                 value={dist} 
                                 onChange={e=>setDist(e.target.value)} 
                                 className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-yellow-500 outline-none"
+                                placeholder="0"
                             />
                         </div>
                     </div>
@@ -989,7 +1072,7 @@ export default function App() {
                     ) : (
                         <>
                             <Camera className="text-gray-400 mb-1" />
-                            <span className="text-xs text-gray-500">Add Photo</span>
+                            <span className="text-xs text-gray-500">Add Photo (Optional)</span>
                         </>
                     )}
                     <input 
@@ -1002,19 +1085,11 @@ export default function App() {
                 </div>
 
                 <button 
-                    onClick={() => submitReview({ 
-                        rating: r, 
-                        locationRating: locR, 
-                        rent: Number(rent), 
-                        distance: Number(dist), 
-                        comment: c, 
-                        image: img, 
-                        tags 
-                    })} 
+                    onClick={handleSave} 
                     disabled={r === 0 || processing} 
                     className="w-full py-3 rounded-lg font-bold bg-yellow-500 hover:bg-yellow-600 text-white disabled:opacity-50 flex items-center justify-center gap-2"
                 >
-                    {processing ? "Processing..." : "Post Review"}
+                    {processing ? "Processing..." : isEditing ? "Save Changes" : "Post Review"}
                 </button>
             </div>
         );
@@ -1077,7 +1152,12 @@ export default function App() {
                                 </div>
                             ) : (
                                 homeFeed.map(review => (
-                                    <ReviewCard key={review.id} review={review} showPropertyContext={true} />
+                                    <ReviewCard 
+                                        key={review.id} 
+                                        review={review} 
+                                        showPropertyContext={true} 
+                                        onEditClick={handleEditFromHome} // <-- Passes handler to enable edit from home
+                                    />
                                 ))
                             )}
                         </div>
@@ -1408,7 +1488,24 @@ export default function App() {
 
                         {showReviewModal && (
                             <Modal title={`Rate ${selectedProp.name}`} onClose={() => setShowReviewModal(false)}>
-                                <ReviewModalContent />
+                                <ReviewModalContent 
+                                    initialData={{}} 
+                                    onSave={submitReview}
+                                    isEditing={false}
+                                    onClose={() => setShowReviewModal(false)}
+                                />
+                            </Modal>
+                        )}
+                        
+                        {/* EDIT REVIEW MODAL */}
+                        {showEditModal && reviewToEdit && (
+                            <Modal title={`Edit Review for ${reviewToEdit.propertyName}`} onClose={() => setShowEditModal(false)}>
+                                <ReviewModalContent
+                                    initialData={reviewToEdit}
+                                    onSave={(formData) => updateReview(reviewToEdit.id, formData)}
+                                    isEditing={true}
+                                    onClose={() => setShowEditModal(false)}
+                                />
                             </Modal>
                         )}
 
@@ -1532,7 +1629,6 @@ export default function App() {
     };
 
     // Global auth modal - renders on all pages
-    // This return statement now calls the helper above, and puts the Modal next to it
     return (
         <>
             {renderContent()}
