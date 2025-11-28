@@ -11,6 +11,7 @@ import {
     sendPasswordResetEmail
 } from 'firebase/auth';
 import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, limit, updateDoc, doc, increment, arrayUnion } from 'firebase/firestore';
+import { Analytics } from "@vercel/analytics/react";
 
 // --- CONSTANTS ---
 const ON_CAMPUS_DORMS = [
@@ -60,7 +61,7 @@ const Footer = () => (
     </footer>
 );
 
-// --- AUTH MODAL COMPONENT (Defined Outside App to Prevent Re-renders) ---
+// --- AUTH MODAL COMPONENT ---
 const AuthModal = ({ onClose, auth }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -74,6 +75,12 @@ const AuthModal = ({ onClose, auth }) => {
         setError('');
         setSuccessMsg('');
         setAuthLoading(true);
+
+        if (!auth) {
+            setError("Authentication service not ready.");
+            setAuthLoading(false);
+            return;
+        }
 
         // Soft Gate: We check the text, but we don't force email verification link
         if (!email.endsWith('@uwaterloo.ca')) {
@@ -96,7 +103,6 @@ const AuthModal = ({ onClose, auth }) => {
                 
                 // 2. SKIP VERIFICATION & POPUP
                 // Simply close the modal. The user is already logged in by the function above.
-                // The main app state will update automatically via onAuthStateChanged.
                 onClose();
                 return; 
             } 
@@ -141,7 +147,7 @@ const AuthModal = ({ onClose, auth }) => {
                     </p>
                 </div>
 
-                {/* Warning Banner for Signup */}
+                {/* --- WARNING BANNER IS HERE --- */}
                 {mode === 'SIGNUP' && (
                     <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mb-6 flex gap-3 text-left">
                         <AlertTriangle className="text-orange-500 shrink-0" size={20} />
@@ -263,7 +269,8 @@ export default function App() {
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [user, setUser] = useState(null);
-    const [appId, setAppId] = useState("rate-my-rez-default");
+    
+    const appId = typeof __app_id !== 'undefined' ? __app_id : "rate-my-rez-default";
     
     const [view, setView] = useState('HOME'); 
     const [category, setCategory] = useState('ON');
@@ -287,15 +294,32 @@ export default function App() {
     useEffect(() => {
         const initAuth = async () => {
             try {
-                const firebaseConfig = {
-                    apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-                    authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-                    projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-                    storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-                    messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-                    appId: import.meta.env.VITE_FIREBASE_APP_ID,
-                    measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
-                };
+                let firebaseConfig;
+                // SAFE CHECK for environment
+                if (typeof __firebase_config !== 'undefined') {
+                    firebaseConfig = JSON.parse(__firebase_config);
+                } else {
+                     // Safe fallback to check if env exists
+                     const getEnv = (key) => {
+                         try { return import.meta.env[key] } catch(e) { return undefined }
+                     };
+                     
+                     firebaseConfig = {
+                        apiKey: getEnv('VITE_FIREBASE_API_KEY'),
+                        authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN'),
+                        projectId: getEnv('VITE_FIREBASE_PROJECT_ID'),
+                        storageBucket: getEnv('VITE_FIREBASE_STORAGE_BUCKET'),
+                        messagingSenderId: getEnv('VITE_FIREBASE_MESSAGING_SENDER_ID'),
+                        appId: getEnv('VITE_FIREBASE_APP_ID'),
+                        measurementId: getEnv('VITE_FIREBASE_MEASUREMENT_ID')
+                    };
+                }
+
+                // If config is missing keys, log but don't crash immediately
+                if (!firebaseConfig.apiKey) {
+                    console.warn("Firebase config is missing or incomplete.");
+                    return;
+                }
 
                 const app = initializeApp(firebaseConfig);
                 const authInstance = getAuth(app);
@@ -1382,6 +1406,7 @@ export default function App() {
         <>
             {renderContent()}
             {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} auth={auth} />}
+            <Analytics /> {/* ✅ Added here - simple and clean */}
         </>
     );
 }
