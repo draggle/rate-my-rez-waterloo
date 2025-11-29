@@ -21,7 +21,12 @@ const ON_CAMPUS_DORMS = [
     { id: 'mkv', name: 'Mackenzie King Village (MKV)', type: 'Suite Style', address: 'Mackenzie King Village, Waterloo, ON' },
     { id: 'uwp', name: 'UW Place (UWP)', type: 'Suite Style', address: 'UW Place, Waterloo, ON' },
     { id: 'clv', name: 'Columbia Lake Village (CLV)', type: 'Townhouse', address: 'Columbia Lake Village, Waterloo, ON' },
-    { id: 'mh', name: 'Minota Hagey (MH)', type: 'Traditional', address: 'Minota Hagey Residence, Waterloo, ON' }
+    { id: 'mh', name: 'Minota Hagey (MH)', type: 'Traditional', address: 'Minota Hagey Residence, Waterloo, ON' },
+    // ADDED UNIVERSITY COLLEGE RESIDENCES
+    { id: 'sju', name: 'St. Jerome\'s University', type: 'Affiliated College', address: 'St. Jerome\'s University, Waterloo, ON' },
+    { id: 'renison', name: 'Renison University College', type: 'Affiliated College', address: 'Renison University College, Waterloo, ON' },
+    { id: 'united', name: 'United College', type: 'Affiliated College', address: 'United College, Waterloo, ON' },
+    { id: 'grebel', name: 'Conrad Grebel University College', type: 'Affiliated College', address: 'Conrad Grebel University College, Waterloo, ON' }
 ];
 
 const POPULAR_OFF_CAMPUS = [
@@ -534,7 +539,7 @@ export default function App() {
         }
     };
     
-    // NEW: Handler for editing from the Home feed
+    // Handler for editing from the Home feed
     const handleEditFromHome = (review) => {
         const allProperties = [...ON_CAMPUS_DORMS, ...POPULAR_OFF_CAMPUS];
         
@@ -1306,7 +1311,7 @@ export default function App() {
                                                 {prop.type}
                                             </span>
                                         </div>
-                                        <ArrowRightIcon className="text-gray-300 group-hover:text-gray-500 transition-colors" />
+                                        <ArrowRightIcon className="w-4 h-4 text-gray-300 group-hover:text-gray-500 transition-colors" />
                                     </div>
                                 </div>
                             ))}
