@@ -22,11 +22,14 @@ const ON_CAMPUS_DORMS = [
     { id: 'uwp', name: 'UW Place (UWP)', type: 'Suite Style', address: 'UW Place, Waterloo, ON' },
     { id: 'clv', name: 'Columbia Lake Village (CLV)', type: 'Townhouse', address: 'Columbia Lake Village, Waterloo, ON' },
     { id: 'mh', name: 'Minota Hagey (MH)', type: 'Traditional', address: 'Minota Hagey Residence, Waterloo, ON' },
-    // ADDED UNIVERSITY COLLEGE RESIDENCES
+    // UNDERGRADUATE AFFILIATED COLLEGES
     { id: 'sju', name: 'St. Jerome\'s University', type: 'Affiliated College', address: 'St. Jerome\'s University, Waterloo, ON' },
     { id: 'renison', name: 'Renison University College', type: 'Affiliated College', address: 'Renison University College, Waterloo, ON' },
     { id: 'united', name: 'United College', type: 'Affiliated College', address: 'United College, Waterloo, ON' },
-    { id: 'grebel', name: 'Conrad Grebel University College', type: 'Affiliated College', address: 'Conrad Grebel University College, Waterloo, ON' }
+    { id: 'grebel', name: 'Conrad Grebel University College', type: 'Affiliated College', address: 'Conrad Grebel University College, Waterloo, ON' },
+    // GRADUATE HOUSING OPTIONS - NAME UPDATED
+    { id: 'cmh-south', name: 'Claudette Millar Hall (CMH) South', type: 'Graduate Apartment', address: 'Claudette Millar Hall, Waterloo, ON' },
+    { id: 'united-grad', name: 'United College Grad Apartments', type: 'Graduate Apartment', address: 'United College, Waterloo, ON' }
 ];
 
 const POPULAR_OFF_CAMPUS = [
@@ -797,6 +800,7 @@ export default function App() {
     const ReviewCard = ({ review, showPropertyContext, onEditClick }) => {
         const hasVoted = user && review.votedUids && review.votedUids.includes(user.uid);
         const isAuthor = user && review.userId === user.uid; 
+        const studentLevel = review.studentLevel || '';
         
         const handleEditClick = (e) => {
             e.stopPropagation();
@@ -845,6 +849,15 @@ export default function App() {
                                     <MapPin size={12}/> Loc: {review.locationRating}/5
                                 </span>
                             )}
+                            {/* DISPLAY STUDENT LEVEL */}
+                            {studentLevel && (
+                                <span className={`flex items-center gap-1 font-semibold px-2 py-0.5 rounded-full text-xs 
+                                    ${studentLevel === 'Graduate' ? 'bg-indigo-100 text-indigo-700' : 'bg-yellow-100 text-yellow-700'}`}
+                                >
+                                    <GraduationCap size={12}/> {studentLevel}
+                                </span>
+                            )}
+                            {/* END DISPLAY */}
                         </div>
                         {review.tags && review.tags.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-3">
@@ -938,6 +951,8 @@ export default function App() {
     
     // REUSABLE COMPONENT FOR BOTH NEW AND EDIT
     const ReviewModalContent = ({ initialData = {}, onSave, isEditing = false, onClose }) => {
+        // State for student level, defaulting to '' (prefer not to answer)
+        const [studentLevel, setStudentLevel] = useState(initialData.studentLevel || '');
         const [r, setR] = useState(initialData.rating || 0); 
         const [locR, setLocR] = useState(initialData.locationRating || 0); 
         const [c, setC] = useState(initialData.comment || '');
@@ -986,12 +1001,37 @@ export default function App() {
                 distance: Number(dist), 
                 comment: c, 
                 image: img, 
-                tags
+                tags,
+                studentLevel: studentLevel, // <-- NEW DATA FIELD
             });
         };
 
         return (
             <div className="space-y-6">
+                
+                {/* NEW: STUDENT LEVEL DROPDOWN */}
+                <div>
+                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
+                        Student Status
+                    </label>
+                    <div className="relative">
+                        <GraduationCap size={16} className="absolute left-3 top-3 text-gray-400"/>
+                        <select
+                            value={studentLevel}
+                            onChange={(e) => setStudentLevel(e.target.value)}
+                            className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-yellow-500 outline-none appearance-none"
+                        >
+                            <option value="">Prefer not to answer</option>
+                            <option value="Undergraduate">Undergraduate</option>
+                            <option value="Graduate">Graduate</option>
+                        </select>
+                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                           <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/></svg>
+                        </div>
+                    </div>
+                </div>
+                {/* END NEW DROPDOWN */}
+
                 <div>
                     <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">
                         Overall Experience
@@ -1307,7 +1347,8 @@ export default function App() {
                                             <h3 className="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
                                                 {prop.name}
                                             </h3>
-                                            <span className={`inline-block mt-2 px-2.5 py-0.5 border text-xs font-medium rounded-full ${tagClass}`}>
+                                            {/* Logic updated to highlight Graduate Apartment type */}
+                                            <span className={`inline-block mt-2 px-2.5 py-0.5 border text-xs font-medium rounded-full ${prop.type === 'Graduate Apartment' ? 'bg-indigo-100 text-indigo-700 border-indigo-200' : tagClass}`}>
                                                 {prop.type}
                                             </span>
                                         </div>
