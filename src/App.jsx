@@ -29,7 +29,7 @@ const ON_CAMPUS_DORMS = [
     { id: 'grebel', name: 'Conrad Grebel University College', type: 'Affiliated College', address: 'Conrad Grebel University College, Waterloo, ON' },
     // GRADUATE HOUSING OPTIONS - NAME UPDATED
     { id: 'cmh-south', name: 'Claudette Millar Hall (CMH) South', type: 'Graduate Apartment', address: 'Claudette Millar Hall, Waterloo, ON' },
-    { id: 'united-grad', name: 'United College Grad Apartments', type: 'Graduate Apartment', address: 'United College, Waterloo, ON' }
+    { id: 'united-grad', name: 'United College (Graduate)', type: 'Graduate Apartment', address: 'United College, Waterloo, ON' }
 ];
 
 const POPULAR_OFF_CAMPUS = [
