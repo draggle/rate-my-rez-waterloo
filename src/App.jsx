@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { MapPin, Star, Building2, Home, Search, Plus, MessageSquare, ArrowLeft, TrendingUp, Camera, X, Image as ImageIcon, DollarSign, Footprints, Map, Filter, Menu, ThumbsUp, Info, Mail, GraduationCap, Check, AlertTriangle, MessageCircle, Send, CornerDownRight, LogIn, LogOut, User, Edit } from 'lucide-react';
+import { MapPin, Star, Building2, Home, Search, Plus, MessageSquare, ArrowLeft, TrendingUp, Camera, X, Image as ImageIcon, DollarSign, Footprints, Map, Filter, Menu, ThumbsUp, Info, Mail, GraduationCap, Check, AlertTriangle, MessageCircle, Send, CornerDownRight, LogIn, LogOut, User, Edit, Phone, Calendar, ArrowUpRight, Trash2 } from 'lucide-react';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
@@ -10,7 +10,7 @@ import {
     signOut,
     sendPasswordResetEmail
 } from 'firebase/auth';
-import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, limit, updateDoc, doc, increment, arrayUnion } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, query, where, onSnapshot, serverTimestamp, orderBy, limit, updateDoc, doc, increment, arrayUnion, deleteDoc } from 'firebase/firestore';
 import { Analytics } from "@vercel/analytics/react";
 
 // --- CONSTANTS ---
@@ -21,13 +21,13 @@ const ON_CAMPUS_DORMS = [
     { id: 'mkv', name: 'Mackenzie King Village (MKV)', type: 'Suite Style', address: 'Mackenzie King Village, Waterloo, ON' },
     { id: 'uwp', name: 'UW Place (UWP)', type: 'Suite Style', address: 'UW Place, Waterloo, ON' },
     { id: 'clv', name: 'Columbia Lake Village (CLV)', type: 'Townhouse', address: 'Columbia Lake Village, Waterloo, ON' },
-    { id: 'mh', name: 'Minota Hagey (MH)', type: 'Traditional', address: 'Minota Hagey Residence, Waterloo, ON' },
+    { id: 'mh', name: 'Minota Hagey (MH)', type: 'Affiliated College', address: 'Minota Hagey Residence, Waterloo, ON' },
     // UNDERGRADUATE AFFILIATED COLLEGES
     { id: 'sju', name: 'St. Jerome\'s University', type: 'Affiliated College', address: 'St. Jerome\'s University, Waterloo, ON' },
     { id: 'renison', name: 'Renison University College', type: 'Affiliated College', address: 'Renison University College, Waterloo, ON' },
     { id: 'united', name: 'United College', type: 'Affiliated College', address: 'United College, Waterloo, ON' },
     { id: 'grebel', name: 'Conrad Grebel University College', type: 'Affiliated College', address: 'Conrad Grebel University College, Waterloo, ON' },
-    // GRADUATE HOUSING OPTIONS - NAME UPDATED
+    // GRADUATE HOUSING OPTIONS
     { id: 'cmh-south', name: 'Claudette Millar Hall (CMH) South', type: 'Graduate Apartment', address: 'Claudette Millar Hall, Waterloo, ON' },
     { id: 'united-grad', name: 'United College (Graduate)', type: 'Graduate Apartment', address: 'United College, Waterloo, ON' }
 ];
@@ -113,7 +113,7 @@ const AuthModal = ({ onClose, auth }) => {
                 // Simply close the modal. The user is already logged in by the function above.
                 onClose();
                 return; 
-            } 
+            }
             
             if (mode === 'LOGIN') {
                 await signInWithEmailAndPassword(auth, email, password);
@@ -205,7 +205,6 @@ const AuthModal = ({ onClose, auth }) => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 className="w-full bg-gray-50 border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:border-yellow-500 outline-none"
-                                placeholder="••••••••"
                             />
                         </div>
                     )}
@@ -272,11 +271,69 @@ const AuthModal = ({ onClose, auth }) => {
     );
 };
 
+// --- NEW SUCCESS MODAL COMPONENT (Only used for errors or specific success feedback) ---
+const SuccessModal = ({ message, onClose }) => {
+    useEffect(() => {
+        // Automatically close the modal after 3 seconds
+        const timer = setTimeout(onClose, 3000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+
+    return (
+        <div className="fixed inset-0 bg-gray-900/10 backdrop-blur-sm z-[2000] flex items-start justify-center p-4 pt-20 animate-in fade-in duration-200">
+            <div className="bg-white border border-green-300 w-full max-w-sm rounded-xl p-4 shadow-2xl relative flex items-center gap-3">
+                <Check size={24} className="text-green-600 shrink-0"/>
+                <p className="text-sm font-medium text-gray-800 flex-grow">{message}</p>
+                <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                    <X size={18}/>
+                </button>
+            </div>
+        </div>
+    );
+};
+
+// --- NEW CUSTOM DELETE CONFIRMATION MODAL (FIXED TITLE DISPLAY & CLOSING) ---
+const ConfirmDeleteModal = ({ listing, onConfirm, onClose }) => {
+    const displayTitle = listing.title && listing.title.trim() !== '' ? `"${listing.title}"` : "this listing";
+
+    return (
+        <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-[5000] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-200">
+            <div className="bg-white border border-red-300 w-full max-w-sm rounded-xl p-6 shadow-2xl relative">
+                <AlertTriangle size={24} className="text-red-500 mb-4 mx-auto"/>
+                <h3 className="text-lg font-bold text-gray-900 text-center mb-4">Confirm Deletion</h3>
+                <p className="text-sm text-gray-600 text-center mb-6">
+                    Are you sure you want to delete {displayTitle}? This cannot be undone.
+                </p>
+                <div className="flex justify-center gap-3">
+                    <button 
+                        onClick={onClose} 
+                        className="flex-1 py-2 rounded-lg font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={() => {
+                            // Execute the deletion and close the modal
+                            onConfirm(listing.id, listing.title);
+                            onClose(); // <-- Closes the modal immediately after confirmation
+                        }} 
+                        className="flex-1 py-2 rounded-lg font-bold text-white bg-red-600 hover:bg-red-700 transition-colors"
+                    >
+                        Delete Permanently
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 export default function App() {
     // --- STATE ---
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [user, setUser] = useState(null);
+    // Removed Storage state
     
     const appId = typeof __app_id !== 'undefined' ? __app_id : "rate-my-rez-default";
     
@@ -288,11 +345,19 @@ export default function App() {
     const [questions, setQuestions] = useState([]);
     const [homeFeed, setHomeFeed] = useState([]); 
     
+    // NEW: Listings state
+    const [offCampusListings, setOffCampusListings] = useState([]);
+    const [listingToEdit, setListingToEdit] = useState(null); // NEW STATE FOR LISTINGS EDIT
+    
     const [loading, setLoading] = useState(false);
     const [showReviewModal, setShowReviewModal] = useState(false);
     const [showQuestionModal, setShowQuestionModal] = useState(false);
+    const [showListingsModal, setShowListingsModal] = useState(false); 
     const [showAuthModal, setShowAuthModal] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+    // NEW: Custom success modal state and delete confirmation state
+    const [showSuccessModal, setShowSuccessModal] = useState({ visible: false, message: '' });
+    const [showConfirmDelete, setShowConfirmDelete] = useState(null); // { id, title }
     
     // EDITING FEATURE STATES
     const [showEditModal, setShowEditModal] = useState(false);
@@ -313,11 +378,11 @@ export default function App() {
                     firebaseConfig = JSON.parse(__firebase_config);
                 } else {
                      // Safe fallback to check if env exists
-                     const getEnv = (key) => {
-                         try { return import.meta.env[key] } catch(e) { return undefined }
-                     };
-                     
-                     firebaseConfig = {
+                    const getEnv = (key) => {
+                        try { return import.meta.env[key] } catch(e) { return undefined }
+                    };
+                    
+                    firebaseConfig = {
                         apiKey: getEnv('VITE_FIREBASE_API_KEY'),
                         authDomain: getEnv('VITE_FIREBASE_AUTH_DOMAIN'),
                         projectId: getEnv('VITE_FIREBASE_PROJECT_ID'),
@@ -337,6 +402,7 @@ export default function App() {
                 const app = initializeApp(firebaseConfig);
                 const authInstance = getAuth(app);
                 const firestore = getFirestore(app);
+                // Removed Storage initialization
                 
                 setDb(firestore);
                 setAuth(authInstance);
@@ -377,6 +443,24 @@ export default function App() {
         });
         return () => unsub();
     }, [db, appId, user, view]);
+    
+    // NEW: Fetch Listings data
+    useEffect(() => {
+        if (!db || !appId || view !== 'LISTINGS') return;
+        setLoading(true);
+        const q = query(
+            collection(db, 'artifacts', appId, 'public', 'data', 'offCampusListings'), 
+            orderBy('timestamp', 'desc'),
+            limit(50)
+        );
+        const unsub = onSnapshot(q, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setOffCampusListings(data);
+            setLoading(false);
+        });
+        return () => unsub();
+    }, [db, appId, view]);
+
 
     useEffect(() => {
         if (!db || !selectedProp || !appId || !user || view === 'HOME') return;
@@ -444,6 +528,86 @@ export default function App() {
             avgDist: validDist.length ? Math.round(sumDist / validDist.length) : 0
         };
     }, [reviews]);
+    
+    // NEW: Submit Listing function (NO SUCCESS POPUP)
+    const submitListing = async (formData) => {
+        if (!db || !user || user.isAnonymous) {
+            alert("Authentication required or services not connected.");
+            setShowAuthModal(true);
+            return;
+        }
+
+        try {
+            await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'offCampusListings'), {
+                title: formData.title,
+                description: formData.description,
+                rent: Number(formData.rent),
+                contactEmail: formData.contactEmail,
+                contactPhone: formData.contactPhone,
+                dates: formData.dates,
+                image: formData.image, // Base64 image data (small images only)
+                videoUrl: formData.videoUrl, // YouTube or other embed link
+                timestamp: serverTimestamp(),
+                userId: user.uid,
+            });
+
+            setShowListingsModal(false);
+            // setShowSuccessModal({ visible: true, message: "Listing posted successfully!" }); // Suppress success popup
+        } catch (err) {
+            console.error("Error posting listing:", err);
+            setShowSuccessModal({ visible: true, message: "Error posting listing." });
+        }
+    };
+    
+    // NEW: Update Listing Function (SUPPRESSING SUCCESS POPUP)
+    const updateListing = async (listingId, formData) => {
+        if (!db || !appId || !user) {
+            setShowSuccessModal({ visible: true, message: "Authentication required or services not connected." });
+            return;
+        }
+        
+        try {
+            const listingRef = doc(db, 'artifacts', appId, 'public', 'data', 'offCampusListings', listingId);
+            await updateDoc(listingRef, {
+                ...formData,
+                lastEdited: serverTimestamp(),
+            });
+            setListingToEdit(null); // Close the edit modal
+            
+            // SUPPRESSED: No success popup as requested
+        } catch (err) {
+            console.error("Error updating listing:", err);
+            setShowSuccessModal({ visible: true, message: "Error updating listing." });
+        }
+    };
+    
+    // New: Final Execution of Deletion (Called by ConfirmDeleteModal)
+    const deleteListing = async (listingId, title) => {
+        if (!db || !appId || !user) {
+            setShowSuccessModal({ visible: true, message: "Authentication required or services not connected." });
+            return;
+        }
+        
+        try {
+            const listingRef = doc(db, 'artifacts', appId, 'public', 'data', 'offCampusListings', listingId);
+            await deleteDoc(listingRef);
+            
+            // SUPPRESSED: No success popup as requested
+        } catch (err) {
+            console.error("Error deleting listing:", err);
+            // This is where Firebase rule rejection errors will surface.
+            setShowSuccessModal({ visible: true, message: "Deletion failed. Check Firebase rules and network status." });
+        }
+    };
+
+    // New: Entry point for deletion (Triggers Confirmation Modal)
+    const triggerDeleteConfirmation = (data) => {
+        if (!user || user.isAnonymous) {
+             setShowSuccessModal({ visible: true, message: "You must be logged in to delete listings." });
+             return;
+        }
+        setShowConfirmDelete(data);
+    };
 
     // --- SUBMIT/UPDATE REVIEW ---
     const submitReview = async (formData) => {
@@ -593,7 +757,7 @@ export default function App() {
                     </h1>
                 </div>
 
-                {/* Desktop Navigation - Hidden on mobile */}
+                {/* Desktop Navigation */}
                 <div className="hidden md:flex items-center gap-6">
                     <button 
                         onClick={() => { setCategory('ON'); setView('LIST_ON'); }} 
@@ -606,6 +770,12 @@ export default function App() {
                         className={`text-sm font-bold hover:text-blue-600 transition-colors ${view === 'LIST_OFF' ? 'text-blue-600' : 'text-gray-600'}`}
                     >
                         Off Campus
+                    </button>
+                    <button 
+                        onClick={() => setView('LISTINGS')} 
+                        className={`text-sm font-bold hover:text-green-600 transition-colors ${view === 'LISTINGS' ? 'text-green-600' : 'text-gray-600'}`}
+                    >
+                        Listings
                     </button>
                     <button 
                         onClick={() => setView('ABOUT')} 
@@ -670,6 +840,13 @@ export default function App() {
                             targetView="LIST_OFF" 
                             onClick={() => { setCategory('OFF'); setView('LIST_OFF'); setIsMobileMenuOpen(false); }}
                             icon={<MapPin size={18}/>}
+                        />
+                        <MobileNavLink 
+                            label="Listings" 
+                            currentView={view} 
+                            targetView="LISTINGS" 
+                            onClick={() => { setView('LISTINGS'); setIsMobileMenuOpen(false); }}
+                            icon={<DollarSign size={18}/>}
                         />
                         <MobileNavLink 
                             label="About" 
@@ -1140,6 +1317,463 @@ export default function App() {
         );
     };
 
+    // NEW: Component for Posting/Editing a Listing
+    const ListingsModalContent = ({ initialData = {}, onSave, isEditing = false, onClose }) => {
+        const [title, setTitle] = useState(initialData.title || '');
+        const [description, setDescription] = useState(initialData.description || '');
+        const [rent, setRent] = useState(initialData.rent || '');
+        const [email, setEmail] = useState(initialData.contactEmail || '');
+        const [phone, setPhone] = useState(initialData.contactPhone || '');
+        const [dates, setDates] = useState(initialData.dates || '');
+        
+        const [videoUrl, setVideoUrl] = useState(initialData.videoUrl || ''); 
+        const [imagePreview, setImagePreview] = useState(initialData.image || null); 
+        
+        const [processing, setProcessing] = useState(false);
+        const imageInputRef = useRef(null);
+        
+        // Utility to check for YouTube ID
+        const getYouTubeId = (url) => {
+            if (!url) return null;
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|\w+\/)|youtu\.be\/|\/(?:v|e)\/|.*[?&]v=)([^"&?\/ ]{11})/;
+            const match = url.match(regex);
+            return (match && match[1].length === 11) ? match[1] : null;
+        };
+
+        // Handles image file selection (saves as Base64 string directly)
+        const handleImageFileChange = async (e) => {
+            if (e.target.files && e.target.files[0]) {
+                setProcessing(true);
+                const file = e.target.files[0];
+                
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = (event) => {
+                    const i = new Image();
+                    i.src = event.target.result;
+                    i.onload = () => {
+                        const cvs = document.createElement('canvas');
+                        const scale = 800 / i.width;
+                        cvs.width = 800;
+                        cvs.height = i.height * scale;
+                        const ctx = cvs.getContext('2d');
+                        ctx.drawImage(i, 0, 0, cvs.width, cvs.height);
+                        setImagePreview(cvs.toDataURL('image/jpeg', 0.7)); // Saves Base64
+                        setProcessing(false);
+                    };
+                };
+            }
+        };
+        
+        const handleSave = () => {
+            if (!title || !description || !rent || (!email && !phone)) {
+                alert("Please fill in the title, description, rent, and at least one contact method.");
+                return;
+            }
+            
+            // Prepare final data structure
+            const formData = {
+                title,
+                description,
+                rent: Number(rent),
+                contactEmail: email,
+                contactPhone: phone,
+                dates,
+                image: imagePreview, // Base64 string saved directly
+                videoUrl: videoUrl, // URL saved directly
+            };
+
+            onSave(formData);
+        };
+
+        return (
+            <div className="space-y-4">
+                <input
+                    type="text"
+                    placeholder="Listing Title (e.g., Sublet at ICON May-Aug)"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-gray-900 focus:border-green-500 outline-none"
+                />
+                <textarea
+                    placeholder="Full description: address, room type, utilities included, etc."
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full bg-white border border-gray-300 rounded-lg p-3 text-gray-900 focus:border-green-500 outline-none h-24 resize-none"
+                />
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="relative">
+                        <Calendar size={16} className="absolute left-3 top-3 text-gray-400"/>
+                        <input
+                            type="text"
+                            placeholder="Dates (e.g., May 1 - Aug 31)"
+                            value={dates}
+                            onChange={(e) => setDates(e.target.value)}
+                            className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-green-500 outline-none"
+                        />
+                    </div>
+                    <div className="relative">
+                        <DollarSign size={16} className="absolute left-3 top-3 text-gray-400"/>
+                        <input
+                            type="number"
+                            placeholder="Monthly Rent ($)"
+                            value={rent}
+                            onChange={(e) => setRent(e.target.value)}
+                            className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-green-500 outline-none"
+                        />
+                    </div>
+                </div>
+                
+                {/* MEDIA INPUTS */}
+                
+                <div className="border border-gray-200 rounded-lg p-4 space-y-3">
+                    <h4 className="text-sm font-bold text-gray-700">Add Media (Photo or YouTube Link)</h4>
+                    
+                    {/* PHOTO UPLOAD AREA (Saves Base64) */}
+                    <div 
+                        onClick={() => imageInputRef.current.click()} 
+                        className={`border-2 border-dashed ${imagePreview ? 'border-yellow-500 bg-yellow-50' : 'border-gray-300 bg-gray-50'} hover:border-yellow-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer`}
+                    >
+                        {imagePreview ? (
+                            <div className="relative w-full">
+                                <img src={imagePreview} className="h-24 w-full object-cover rounded-lg" />
+                                <div className="absolute inset-0 bg-black/40 rounded-lg opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center text-white text-sm">
+                                    Change Photo
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                <Camera className="text-gray-400 mb-1" />
+                                <span className="text-xs text-gray-500">Upload Photo File (Small Size Recommended)</span>
+                            </>
+                        )}
+                        <input 
+                            type="file" 
+                            accept="image/*" 
+                            ref={imageInputRef} 
+                            onChange={handleImageFileChange} 
+                            className="hidden" 
+                            disabled={processing}
+                        />
+                    </div>
+                    
+                    <p className="text-xs text-gray-500 text-center">- OR -</p>
+
+                    {/* YOUTUBE URL INPUT */}
+                    <div className="relative">
+                        <input
+                            type="url"
+                            placeholder="Paste YouTube Link (e.g., https://youtu.be/xxx)"
+                            value={videoUrl}
+                            onChange={(e) => setVideoUrl(e.target.value)}
+                            className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-3 pr-3 text-gray-900 focus:border-green-500 outline-none"
+                            disabled={processing}
+                        />
+                        {videoUrl && !getYouTubeId(videoUrl) && <p className="text-xs text-red-500 mt-1">Warning: URL does not look like a standard YouTube link.</p>}
+                        {videoUrl && getYouTubeId(videoUrl) && <p className="text-xs text-green-600 mt-1">YouTube link detected.</p>}
+                    </div>
+
+                </div>
+                {/* END MEDIA INPUTS */}
+
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="relative">
+                        <Mail size={16} className="absolute left-3 top-3 text-gray-400"/>
+                        <input
+                            type="email"
+                            placeholder="Contact Email (Required)"
+                            value={email}
+                            onChange={(e) => setEmail(e.target.value)}
+                            className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-green-500 outline-none"
+                            required
+                        />
+                    </div>
+                    <div className="relative">
+                        <Phone size={16} className="absolute left-3 top-3 text-gray-400"/>
+                        <input
+                            type="tel"
+                            placeholder="Contact Phone (Optional)"
+                            value={phone}
+                            onChange={(e) => setPhone(e.target.value)}
+                            className="w-full bg-white border border-gray-300 rounded-lg py-2 pl-9 pr-3 text-gray-900 focus:border-green-500 outline-none"
+                        />
+                    </div>
+                </div>
+                <button 
+                    onClick={handleSave}
+                    disabled={processing}
+                    className={`w-full py-3 rounded-lg font-bold ${isEditing ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-500 hover:bg-green-600'} text-white shadow-md transition-colors disabled:opacity-50`}
+                >
+                    {processing ? "Processing..." : isEditing ? "Save Changes" : "Post Listing"}
+                </button>
+            </div>
+        );
+    };
+
+    // --- NEW MEDIA LIGHTBOX MODAL ---
+    const MediaLightbox = ({ mediaItems, onClose }) => {
+        const renderLightboxMedia = (item, index) => {
+            if (!item) return null;
+
+            if (item.type === 'image') {
+                return (
+                    <div key={index} className="w-full h-auto max-h-[80vh] overflow-hidden rounded-lg bg-gray-900 flex items-center justify-center">
+                        <img src={item.url} className="w-full h-auto max-w-full object-contain" alt={`Listing media ${index + 1}`} />
+                    </div>
+                );
+            }
+
+            if (item.type === 'video' && item.embedUrl) {
+                return (
+                    <div key={index} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 bg-gray-900">
+                        <iframe
+                            className="w-full h-full"
+                            src={item.embedUrl}
+                            title="YouTube video player"
+                            frameBorder="0"
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                        ></iframe>
+                    </div>
+                );
+            }
+            return (
+                <div key={index} className="aspect-video w-full rounded-lg overflow-hidden border border-gray-200 bg-gray-50 flex items-center justify-center">
+                    <p className="text-gray-500 text-sm p-4">Media {index + 1} not available for direct embedding.</p>
+                </div>
+            );
+        };
+
+        return (
+            // Ensured high z-index (z-[999]) and fixed positioning for full screen coverage
+            <div className="fixed inset-0 bg-gray-900/90 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-in fade-in zoom-in duration-200">
+                {/* Modal content container */}
+                <div className="bg-white w-full max-w-4xl rounded-xl shadow-xl relative max-h-[90vh] overflow-y-auto p-0">
+                    
+                    {/* Sticky header now contains both the Title and the Close Button,
+                               ensuring they scroll together and the button is on the right. */}
+                    <div className="sticky top-0 bg-white pt-4 pb-4 px-4 z-[1001] shadow-sm border-b border-gray-100">
+                        <div className="flex justify-between items-center"> {/* New wrapper for title/button alignment */}
+                            <h3 className="text-xl font-bold text-gray-900">All Listing Media ({mediaItems.length} items)</h3>
+                            
+                            <button 
+                                onClick={onClose} 
+                                // Adjusted class: removed absolute/top/right positioning, uses z-index for stacking context
+                                className="text-gray-400 hover:text-gray-600 bg-white/70 rounded-full p-1 z-[1002]"
+                            >
+                                <X size={24}/>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    {/* Scrolling content gets its horizontal padding here. */}
+                    <div className="space-y-6 p-4">
+                        {mediaItems.map(renderLightboxMedia)}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
+
+    // NEW: Component for displaying a single Listing (GALLERY GRID FIX)
+    const ListingCard = ({ listing, user, onEdit, onDelete }) => {
+        const [isLightboxOpen, setIsLightboxOpen] = useState(false); // NEW STATE
+        const isAuthor = user && listing.userId === user.uid && !user.isAnonymous;
+
+        // Utility to safely extract YouTube ID for embed URL
+        const getYouTubeEmbedUrl = (url) => {
+            if (!url) return null;
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|\w+\/)|youtu\.be\/|\/(?:v|e)\/|.*[?&]v=)([^"&?\/ ]{11})/;
+            const match = url.match(regex);
+            // Construct embed link
+            return (match && match[1].length === 11) ? `https://www.youtube.com/embed/${match[1]}` : null;
+        };
+        
+        // 1. Build the array of available media URLs/Base64 strings (UNCHANGED)
+        const mediaItems = useMemo(() => {
+            const items = [];
+            if (listing.image) {
+                items.push({ type: 'image', url: listing.image });
+            }
+            if (listing.videoUrl) {
+                items.push({ type: 'video', url: listing.videoUrl, embedUrl: getYouTubeEmbedUrl(listing.videoUrl) });
+            }
+            return items;
+        }, [listing.image, listing.videoUrl]);
+        
+        // 2. Render Media Function (REPLACED CAROUSEL LOGIC)
+        const renderMedia = (item) => {
+            if (!item) return null;
+
+            if (item.type === 'image') {
+                return (
+                    <img 
+                        src={item.url} 
+                        // Use absolute positioning for object-cover, ensuring height is defined by parent
+                        className="rounded-lg w-full h-full object-cover absolute inset-0" 
+                        alt="Listing photo"
+                    />
+                );
+            }
+
+            if (item.type === 'video') {
+                if (getYouTubeId(item.url)) {
+                    // YouTube Embed
+                    return (
+                        // Aspect ratio ensures video sizing is correct
+                        <div className="aspect-video w-full h-full rounded-lg overflow-hidden"> 
+                            <iframe
+                                className="w-full h-full"
+                                src={item.embedUrl}
+                                title="YouTube video player"
+                                frameBorder="0"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                            ></iframe>
+                        </div>
+                    );
+                } else {
+                    // Direct Video Link fallback 
+                    return (
+                        <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                            <p className="text-gray-500 text-sm p-4 text-center">
+                                Video link provided. Click to view all media in a lightbox.
+                            </p>
+                        </div>
+                    );
+                }
+            }
+            return null;
+        };
+
+        const mainMedia = mediaItems[0];
+        
+        return (
+            <div className="bg-white border border-gray-200 p-5 rounded-xl shadow-sm">
+                
+                {/* 1. HEADER (Title, Rent, Date) */}
+                <div className="flex justify-between items-start mb-3">
+                    <div className="w-full">
+                        <h3 className="text-xl font-bold text-gray-900 mb-1">{listing.title}</h3>
+                        <p className="text-2xl font-black text-emerald-600">${listing.rent} <span className="text-sm font-medium text-gray-500">/ month</span></p>
+                    </div>
+                    <span className="text-xs text-gray-400 font-mono whitespace-nowrap">
+                        {listing.timestamp ? new Date(listing.timestamp.seconds * 1000).toLocaleDateString() : 'Just now'}
+                    </span>
+                </div>
+                
+                {/* 2. DESCRIPTION */}
+                <p className="text-gray-700 text-sm leading-relaxed whitespace-pre-wrap mt-2">{listing.description}</p>
+                
+                {/* 3. MEDIA GALLERY (FIXED: Grid replaces Carousel) */}
+                {(mediaItems.length > 0) ? (
+                    <div className="mt-6 pt-3 border-t border-gray-100">
+                        
+                        {/* Main Media Preview */}
+                        <div 
+                            onClick={() => setIsLightboxOpen(true)}
+                            // Height logic simplified: image gets fixed height, video takes up space based on aspect
+                            className={`relative w-full overflow-hidden cursor-pointer hover:opacity-90 transition-opacity ${mainMedia?.type === 'image' ? 'h-56' : 'h-auto aspect-video'} rounded-lg border border-gray-200 shadow-sm mb-2`}
+                        >
+                            {renderMedia(mainMedia)}
+                            {/* FIX: Added z-10 here to fix clipping with the title (CHANGE #2) */}
+                            <span className="absolute top-2 right-2 bg-gray-900/70 text-white text-xs font-bold px-2 py-1 rounded-full flex items-center gap-1 z-10">
+                                <ImageIcon size={12}/> View {mediaItems.length} {mediaItems.length > 1 ? 'Media' : 'Photo'}
+                            </span>
+                        </div>
+
+                        {/* Thumbnail Row */}
+                        {mediaItems.length > 1 && (
+                            <div className="flex gap-2">
+                                {mediaItems.slice(1, 4).map((item, index) => {
+                                    // START: FIX #1 - Filter out video items from the thumbnail row
+                                    if (item.type !== 'image') return null;
+                                    // END: FIX #1
+
+                                    return (
+                                        <div
+                                            key={index}
+                                            onClick={() => setIsLightboxOpen(true)}
+                                            className="flex-1 overflow-hidden h-16 rounded-lg border-2 border-gray-200 cursor-pointer hover:border-green-500 transition-colors relative bg-gray-100"
+                                        >
+                                            <img
+                                                src={item.url}
+                                                alt={`Thumbnail ${index + 2}`}
+                                                className="w-full h-full object-cover"
+                                            />
+                                        </div>
+                                    );
+                                })}
+                                {/* If more than 4 items, show a counter thumbnail */}
+                                {mediaItems.length > 4 && (
+                                    <div 
+                                        onClick={() => setIsLightboxOpen(true)}
+                                        className="flex-1 overflow-hidden h-16 rounded-lg bg-gray-100 border-2 border-gray-200 cursor-pointer hover:border-green-500 transition-colors flex items-center justify-center text-gray-600 font-bold text-sm"
+                                    >
+                                        + {mediaItems.length - 4} More
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    // FIX: Replaced large camera icon placeholder with null (CHANGE #1)
+                    null
+                )}
+                {/* END MEDIA GALLERY */}
+
+                {/* 4. CONTACT INFO & ACTIONS */}
+                <div className="flex items-center gap-4 mt-4 pt-3 border-t border-gray-100 text-sm flex-wrap">
+                    {listing.dates && (
+                        <span className="flex items-center gap-1 text-blue-600 font-medium">
+                            <Calendar size={14}/> {listing.dates}
+                        </span>
+                    )}
+                    {listing.contactEmail && (
+                        <a href={`mailto:${listing.contactEmail}`} className="flex items-center gap-1 text-gray-600 hover:text-blue-700 font-medium hover:underline">
+                            <Mail size={14}/> {listing.contactEmail}
+                        </a>
+                    )}
+                    {listing.contactPhone && (
+                        <a href={`tel:${listing.contactPhone}`} className="flex items-center gap-1 text-gray-600 hover:text-blue-700 font-medium hover:underline">
+                            <Phone size={14}/> {listing.contactPhone}
+                        </a>
+                    )}
+                    
+                    {/* NEW: Edit/Delete buttons */}
+                    {isAuthor && (
+                        <div className="flex gap-2 ml-auto">
+                            <button
+                                onClick={() => onEdit(listing)}
+                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-gray-500 hover:text-yellow-600 bg-gray-50 hover:bg-yellow-50 transition-colors"
+                            >
+                                <Edit size={12} /> Edit
+                            </button>
+                            <button
+                                onClick={() => onDelete(listing)} // Triggers custom confirmation
+                                className="flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full text-red-600 hover:text-white bg-red-50 hover:bg-red-500 transition-colors border border-red-200"
+                            >
+                                <Trash2 size={12} /> Delete
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Show contact link if not author, otherwise buttons take space */}
+                    {!isAuthor && (
+                        <span className="ml-auto text-xs text-gray-400 flex items-center gap-1">
+                            Contact Seller Directly <ArrowUpRight size={12}/>
+                        </span>
+                    )}
+                </div>
+
+                {isLightboxOpen && (
+                    <MediaLightbox mediaItems={mediaItems} onClose={() => setIsLightboxOpen(false)} />
+                )}
+            </div>
+        );
+    };
+
     // --- VIEW RENDERER HELPER ---
     const renderContent = () => {
         if (view === 'HOME') {
@@ -1163,7 +1797,9 @@ export default function App() {
                             The student-powered housing database. See what residences are 
                             <span className="text-yellow-600 font-bold"> really</span> like.
                         </p>
-                        <div className="flex justify-center gap-4">
+                        
+                        {/* HOME PAGE BUTTONS */}
+                        <div className="flex justify-center gap-4 mb-4">
                             <button 
                                 onClick={() => { setCategory('ON'); setView('LIST_ON'); }} 
                                 className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all transform hover:-translate-y-0.5"
@@ -1177,6 +1813,17 @@ export default function App() {
                                 Browse Off-Campus
                             </button>
                         </div>
+
+                        {/* CENTRAL LISTINGS BUTTON */}
+                        <div className="flex justify-center">
+                            <button
+                                onClick={() => setView('LISTINGS')}
+                                className="text-sm font-bold text-green-600 hover:text-green-700 hover:underline px-6 py-2 rounded-xl transition-colors flex items-center gap-1"
+                            >
+                                View Off-Campus Listings
+                            </button>
+                        </div>
+                        
                     </div>
 
                     <div className="max-w-6xl mx-auto px-4 mt-12 grid grid-cols-1 md:grid-cols-3 gap-8 flex-grow">
@@ -1185,6 +1832,7 @@ export default function App() {
                                 <TrendingUp className="text-yellow-500" size={20}/>
                                 <h2 className="text-xl font-bold text-gray-900">Fresh Reviews</h2>
                             </div>
+                            
                             {loading ? (
                                 <div className="space-y-4">
                                     {[1,2,3].map(i => (
@@ -1260,6 +1908,89 @@ export default function App() {
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    <Footer />
+                </div>
+            );
+        }
+
+        if (view === 'LISTINGS') {
+            return (
+                <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
+                    <div className="max-w-4xl mx-auto px-6 py-8 flex-grow">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="text-2xl font-black text-gray-900 flex items-center gap-2">
+                                <DollarSign className="text-green-600" size={24}/> Student Listings
+                            </h2>
+                            <button 
+                                onClick={() => setShowListingsModal(true)} 
+                                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 transition-all shadow-sm"
+                            >
+                                <Plus size={18} /> Post Listing
+                            </button>
+                        </div>
+                        
+                        {/* LIABILITY DISCLAIMER */}
+                        <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-8">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="text-red-500 shrink-0 mt-0.5" size={20}/>
+                                <p className="text-sm text-red-800">
+                                    <span className="font-bold block mb-0.5">Scam Warning & Liability:</span>
+                                    Rate My Rez does not verify these listings. **Users are entirely responsible for their own judgment** when contacting sellers, verifying lease agreements, exchanging funds, and ensuring personal safety. 
+                                    Exercise caution and never share sensitive financial information.
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* LISTINGS DISPLAY */}
+                        <div className="space-y-4">
+                            {loading ? (
+                                <p className="text-gray-400 text-center py-8">Loading listings...</p>
+                            ) : offCampusListings.length === 0 ? (
+                                <div className="text-center py-16 bg-white rounded-xl border border-dashed border-gray-300">
+                                    <MessageSquare className="mx-auto text-gray-300 mb-3" size={48} />
+                                    <p className="text-gray-500 font-medium">No off-campus listings posted yet.</p>
+                                </div>
+                            ) : (
+                                offCampusListings.map(listing => (
+                                    <ListingCard 
+                                        key={listing.id} 
+                                        listing={listing}
+                                        user={user}
+                                        onEdit={setListingToEdit}
+                                        onDelete={triggerDeleteConfirmation} // Triggers custom confirmation flow
+                                    />
+                                ))
+                            )}
+                        </div>
+                        
+                        {showListingsModal && (
+                            <Modal title="Post Off-Campus Sublet/Lease" onClose={() => setShowListingsModal(false)}>
+                                <ListingsModalContent onSave={submitListing} onClose={() => setShowListingsModal(false)} />
+                            </Modal>
+                        )}
+
+                        {listingToEdit && (
+                            <Modal title={`Edit Listing: ${listingToEdit.title}`} onClose={() => setListingToEdit(null)}>
+                                <ListingsModalContent
+                                    initialData={listingToEdit}
+                                    isEditing={true}
+                                    onSave={(formData) => updateListing(listingToEdit.id, formData)}
+                                    onClose={() => setListingToEdit(null)}
+                                />
+                            </Modal>
+                        )}
+                        
                     </div>
                     <Footer />
                 </div>
@@ -1582,6 +2313,49 @@ export default function App() {
             );
         }
 
+        if (view === 'CONTACT') {
+            return (
+                <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
+                    <Navbar 
+                        isMobileMenuOpen={isMobileMenuOpen}
+                        setIsMobileMenuOpen={setIsMobileMenuOpen}
+                        user={user}
+                        handleLogout={handleLogout}
+                        setView={setView}
+                        setCategory={setCategory}
+                        view={view}
+                        setShowAuthModal={setShowAuthModal}
+                    />
+                    <div className="max-w-3xl mx-auto px-6 py-12 flex-grow">
+                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm text-center">
+                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6 mx-auto">
+                                <Mail className="text-blue-600" size={32}/>
+                            </div>
+                            <h1 className="text-3xl font-black text-gray-900 mb-2">Get in Touch</h1>
+                            <p className="text-gray-500 mb-8">
+                                Have a feature request? Found a bug? Or just want to say hi?
+                            </p>
+                            <div className="inline-block bg-gray-50 border border-gray-200 p-6 rounded-xl">
+                                <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Direct Email</p>
+                                <a 
+                                    href="mailto:uwratemyrez@gmail.com" 
+                                    className="text-2xl font-bold text-blue-600 hover:underline"
+                                >
+                                    uwratemyrez@gmail.com
+                                </a>
+                            </div>
+                            <div className="mt-8 text-sm text-gray-400">
+                                <p>
+                                    Rate My Rez is a student project and is not officially affiliated with the University of Waterloo.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <Footer />
+                </div>
+            );
+        }
+        
         if (view === 'ABOUT') {
             return (
                 <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
@@ -1629,49 +2403,6 @@ export default function App() {
                 </div>
             );
         }
-
-        if (view === 'CONTACT') {
-            return (
-                <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-                    <Navbar 
-                        isMobileMenuOpen={isMobileMenuOpen}
-                        setIsMobileMenuOpen={setIsMobileMenuOpen}
-                        user={user}
-                        handleLogout={handleLogout}
-                        setView={setView}
-                        setCategory={setCategory}
-                        view={view}
-                        setShowAuthModal={setShowAuthModal}
-                    />
-                    <div className="max-w-3xl mx-auto px-6 py-12 flex-grow">
-                        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm text-center">
-                            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-6 mx-auto">
-                                <Mail className="text-blue-600" size={32}/>
-                            </div>
-                            <h1 className="text-3xl font-black text-gray-900 mb-2">Get in Touch</h1>
-                            <p className="text-gray-500 mb-8">
-                                Have a feature request? Found a bug? Or just want to say hi?
-                            </p>
-                            <div className="inline-block bg-gray-50 border border-gray-200 p-6 rounded-xl">
-                                <p className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-2">Direct Email</p>
-                                <a 
-                                    href="mailto:uwratemyrez@gmail.com" 
-                                    className="text-2xl font-bold text-blue-600 hover:underline"
-                                >
-                                    uwratemyrez@gmail.com
-                                </a>
-                            </div>
-                            <div className="mt-8 text-sm text-gray-400">
-                                <p>
-                                    Rate My Rez is a student project and is not officially affiliated with the University of Waterloo.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                    <Footer />
-                </div>
-            );
-        }
     };
 
     // Global auth modal - renders on all pages
@@ -1679,6 +2410,19 @@ export default function App() {
         <>
             {renderContent()}
             {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} auth={auth} />}
+            {showSuccessModal.visible && (
+                <SuccessModal 
+                    message={showSuccessModal.message} 
+                    onClose={() => setShowSuccessModal({ visible: false, message: '' })}
+                />
+            )}
+            {showConfirmDelete && (
+                <ConfirmDeleteModal
+                    listing={showConfirmDelete}
+                    onConfirm={deleteListing}
+                    onClose={() => setShowConfirmDelete(null)}
+                />
+            )}
             <Analytics /> 
         </>
     );
